@@ -104,6 +104,14 @@
 #include "xf_channels.h"
 #include "xfreerdp.h"
 
+#include <sys/socket.h>
+#include <arpa/inet.h> //inet_addr
+#include <unistd.h>    //write
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include <freerdp/log.h>
 #define TAG CLIENT_TAG("x11")
 
@@ -114,6 +122,12 @@ static int _xf_error_handler(Display* d, XErrorEvent* ev);
 static void xf_check_extensions(xfContext* context);
 static void xf_window_free(xfContext* xfc);
 static BOOL xf_get_pixmap_info(xfContext* xfc);
+
+static int ssock2, csock2;
+static uint32_t frame_buffer[1920*1080];
+static uint32_t frame_width = 0;
+static uint32_t frame_height = 0;
+static volatile uint8_t g_frame_buffer_ready = 0;
 
 #ifdef WITH_XRENDER
 static void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h)
@@ -367,6 +381,16 @@ static BOOL xf_sw_end_paint(rdpContext* context)
 		xf_lock_x11(xfc);
 		xf_rail_paint(xfc, x, y, x + w, y + h);
 		xf_unlock_x11(xfc);
+	}
+
+        //WLog_DBG(TAG,"Assaf 1: %" PRIu32 " 2: %" PRIu32 " 3: %" PRIu32 " 4: %" PRIu32 "", gdi->width, gdi->height, gdi->bitmap_size, 0);
+	printf("got frame, g_frame_buffer_ready = %d\n", g_frame_buffer_ready);
+	if (g_frame_buffer_ready == 0)
+	{
+		memcpy(frame_buffer, gdi->primary_buffer, (gdi->width * gdi->height * sizeof(uint32_t)));
+		frame_width = gdi->width;
+		frame_height = gdi->height;
+		g_frame_buffer_ready = 1;
 	}
 
 	gdi->primary->hdc->hwnd->invalid->null = TRUE;
@@ -1495,6 +1519,127 @@ static BOOL handle_window_events(freerdp* instance)
 	return TRUE;
 }
 
+#pragma pack(1)
+
+typedef struct payload_t {
+    uint16_t x;
+    uint16_t y;
+    uint8_t flags;
+    uint8_t reserved;
+} payload;
+
+#pragma pack()
+
+void sendMsg(int sock, void* msg, uint32_t msgsize)
+{
+    if (write(sock, msg, msgsize) < 0)
+    {
+        printf("Can't send message.\n");
+        closeSocket(sock);
+        exit(1);
+    }
+    printf("Message sent (%d bytes).\n", msgsize);
+    return;
+}
+
+void closeSocket(int sock)
+{
+    close(sock);
+    return;
+}
+
+int createSocket(int port)
+{
+    int sock;
+    struct sockaddr_in server;
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        printf("ERROR: Socket creation failed\n");
+        exit(1);
+    }
+    printf("Socket created\n");
+
+    bzero((char *) &server, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(port);
+    if (bind(sock, (struct sockaddr *)&server , sizeof(server)) < 0)
+    {
+        printf("ERROR: Bind failed\n");
+        exit(1);
+    }
+    printf("Bind done\n");
+
+    listen(sock , 3);
+
+    return sock;
+}
+
+static DWORD WINAPI xf_frame_capture_thread(LPVOID param)
+{
+	while(1)
+	{
+		if (g_frame_buffer_ready == 1)
+		{
+			printf("Frame ready\n");
+			sendMsg(csock2, frame_buffer, frame_width * frame_height * sizeof(uint32_t));
+			uint8_t b[4];
+			read(csock2, b, 4);
+			g_frame_buffer_ready = 0;
+		}
+	}
+}
+
+static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
+{
+    freerdp* instance;
+    instance = (freerdp*)param;
+    int PORT = 2301;
+    int BUFFSIZE = 6;
+    char buff[BUFFSIZE];
+    int ssock, csock;
+    int nread;
+    struct sockaddr_in client;
+    int clilen = sizeof(client);
+
+    ssock = createSocket(PORT);
+    csock = accept(ssock, (struct sockaddr *)&client, &clilen);
+    bool button = false;
+    while(1)
+	{
+        bzero(buff, BUFFSIZE);
+        nread = read(csock, buff, BUFFSIZE);
+        payload *p = (payload*)buff;
+        //printf("Received x=%d, y=%d, flags=%d\n", p->x, p->y, p->flags);
+        XEvent xevent;
+        if (p->flags != button)
+        {
+			printf("p->flags: %d, button: %d\n", p->flags, button);
+            button = p->flags;
+            if (button)
+            {
+                xevent.type = ButtonPress;
+                xevent.xbutton.button = 1;
+            }
+            else
+            {
+                xevent.type = ButtonRelease;
+                xevent.xbutton.button = 1;
+            }
+        }
+        else
+        {
+			xevent.type = MotionNotify;
+			xevent.xmotion.x = p->x;
+			xevent.xmotion.y = p->y;
+        }
+	xf_event_process(instance, &xevent);
+    }
+
+	return 0;
+}
+
 /** Main loop for the rdp connection.
  *  It will be run from the thread's entry point (thread_func()).
  *  It initiates the connection, and will continue to run until the session ends,
@@ -1778,6 +1923,8 @@ static int xfreerdp_client_start(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*)context;
 	rdpSettings* settings = context->settings;
+	static rdpContext context1;
+	static rdpContext context2;
 
 	if (!settings->ServerHostname)
 	{
@@ -1790,6 +1937,13 @@ static int xfreerdp_client_start(rdpContext* context)
 		WLog_ERR(TAG, "failed to create client thread");
 		return -1;
 	}
+
+	/* Create mouse socket thread here */
+	CreateThread(NULL, 0, xf_mouse_socket_thread, context->instance, 0, NULL);
+
+	/* Create frames capture thread here */
+	printf("creating frame capture thread\n");
+	CreateThread(NULL, 0, xf_frame_capture_thread, context->instance, 0, NULL);
 
 	return 0;
 }
@@ -2034,5 +2188,14 @@ int RdpClientEntry(RDP_CLIENT_ENTRY_POINTS* pEntryPoints)
 	pEntryPoints->ClientFree = xfreerdp_client_free;
 	pEntryPoints->ClientStart = xfreerdp_client_start;
 	pEntryPoints->ClientStop = xfreerdp_client_stop;
+
+	struct sockaddr_in client;
+	int clilen = sizeof(client);
+	
+	ssock2 = createSocket(2300);
+	WLog_DBG(TAG,"Socket created.");
+	csock2 = accept(ssock2, (struct sockaddr *)&client, &clilen);
+	WLog_DBG(TAG,"csock value: %" PRIu32 "", csock2);
+
 	return 0;
 }

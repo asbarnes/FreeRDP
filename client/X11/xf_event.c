@@ -406,10 +406,13 @@ BOOL xf_generic_ButtonEvent(xfContext* xfc, int x, int y, int button, Window win
 
 	if (flags != 0)
 	{
+		printf("flags != 0, = %d. is down %d\n", flags, down);
 		if (flags & (PTR_FLAGS_WHEEL | PTR_FLAGS_HWHEEL))
 		{
 			if (down)
+			{
 				freerdp_input_send_mouse_event(input, flags, 0, 0);
+			}
 		}
 		else
 		{
@@ -998,6 +1001,7 @@ BOOL xf_event_process(freerdp* instance, const XEvent* event)
 			break;
 
 		case MotionNotify:
+			DEBUG_X11("MotionNotify %d %d", event->xmotion.x, event->xmotion.y);
 			status = xf_event_MotionNotify(xfc, &event->xmotion, xfc->remote_app);
 			break;
 
