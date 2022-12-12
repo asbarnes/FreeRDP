@@ -1630,21 +1630,21 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
                 xevent.xbutton.button = 1;
             }
         }
-		else if (((p->flags >> 4) & 0x01) != key)
-		{
-			key = (p->flags >> 4) & 0x01;
-			if (key)
-			{
-				xevent.type = KeyPress;
-				xevent.xkey.keycode = p->keyboard;
-			}
-			else
-			{
-				xevent.type = KeyRelease;
-				xevent.xkey.keycode = p->keyboard;
-			}
-			printf("-----> %d %d\n", xevent.type, p->keyboard);
-		}
+		// else if (((p->flags >> 4) & 0x01) != key)
+		// {
+		// 	key = (p->flags >> 4) & 0x01;
+		// 	if (key)
+		// 	{
+		// 		xevent.type = KeyPress;
+		// 		xevent.xkey.keycode = p->keyboard;
+		// 	}
+		// 	else
+		// 	{
+		// 		xevent.type = KeyRelease;
+		// 		xevent.xkey.keycode = p->keyboard;
+		// 	}
+		// 	printf("-----> %d %d\n", xevent.type, p->keyboard);
+		// }
         else
         {
 			xevent.type = MotionNotify;
