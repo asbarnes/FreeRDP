@@ -984,11 +984,11 @@ BOOL xf_event_process(freerdp* instance, const XEvent* event)
 	}
 	xf_event_execute_action_script(xfc, event);
 
-	if (event->type != MotionNotify)
-	{
-		DEBUG_X11("%s Event(%d): wnd=0x%08lX", x11_event_string(event->type), event->type,
-		          (unsigned long)event->xany.window);
-	}
+	// if (event->type != MotionNotify)
+	// {
+	// 	DEBUG_X11("%s Event(%d): wnd=0x%08lX", x11_event_string(event->type), event->type,
+	// 	          (unsigned long)event->xany.window);
+	// }
 
 	switch (event->type)
 	{
