@@ -982,9 +982,7 @@ BOOL xf_event_process(freerdp* instance, const XEvent* event)
 			return TRUE;
 		}
 	}
-	printf("xf_event_execute_action_script\n");
 	xf_event_execute_action_script(xfc, event);
-	printf("after xf_event_execute_action_script\n");
 
 	if (event->type != MotionNotify)
 	{
@@ -1008,6 +1006,7 @@ BOOL xf_event_process(freerdp* instance, const XEvent* event)
 			break;
 
 		case ButtonPress:
+			printf("ButtonPress \n");
 			status = xf_event_ButtonPress(xfc, &event->xbutton, xfc->remote_app);
 			break;
 
