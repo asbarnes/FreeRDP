@@ -1643,6 +1643,7 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
 				xevent.type = KeyRelease;
 				xevent.xkey.keycode = p->keyboard;
 			}
+			printf("-----> %d %d\n", xevent.type, p->keyboard);
 		}
         else
         {
