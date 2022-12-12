@@ -477,7 +477,7 @@ static BOOL xf_event_KeyPress(xfContext* xfc, const XKeyEvent* event, BOOL app)
 	WINPR_UNUSED(app);
 	printf("xf_event_KeyPress\n");
 	XLookupString((XKeyEvent*)event, str, sizeof(str), &keysym, NULL);
-	printf("xf_event_KeyPress after\n");
+	printf("xf_event_KeyPress after: %s\n", str);
 	xf_keyboard_key_press(xfc, event->keycode, keysym);
 	printf("---> %d\n", event->keycode);
 	return TRUE;

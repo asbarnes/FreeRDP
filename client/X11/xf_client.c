@@ -1636,12 +1636,12 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
 			if (key)
 			{
 				xevent.type = KeyPress;
-				xevent.xkey.keycode = p->keyboard;
+				xevent.xkey.keycode = XK_Down ;//p->keyboard;
 			}
 			else
 			{
 				xevent.type = KeyRelease;
-				xevent.xkey.keycode = p->keyboard;
+				xevent.xkey.keycode = XK_Down ;//p->keyboard;
 			}
 			printf("-----> %d %d\n", xevent.type, p->keyboard);
 		}
