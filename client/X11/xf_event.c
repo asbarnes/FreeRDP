@@ -1015,6 +1015,7 @@ BOOL xf_event_process(freerdp* instance, const XEvent* event)
 			break;
 
 		case KeyPress:
+			printf("KeyPress \n");
 			status = xf_event_KeyPress(xfc, &event->xkey, xfc->remote_app);
 			break;
 
