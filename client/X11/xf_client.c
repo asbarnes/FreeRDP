@@ -384,14 +384,14 @@ static BOOL xf_sw_end_paint(rdpContext* context)
 	}
 
         //WLog_DBG(TAG,"Assaf 1: %" PRIu32 " 2: %" PRIu32 " 3: %" PRIu32 " 4: %" PRIu32 "", gdi->width, gdi->height, gdi->bitmap_size, 0);
-	printf("got frame, g_frame_buffer_ready = %d\n", g_frame_buffer_ready);
-	if (g_frame_buffer_ready == 0)
-	{
-		memcpy(frame_buffer, gdi->primary_buffer, (gdi->width * gdi->height * sizeof(uint32_t)));
-		frame_width = gdi->width;
-		frame_height = gdi->height;
-		g_frame_buffer_ready = 1;
-	}
+	// printf("got frame, g_frame_buffer_ready = %d\n", g_frame_buffer_ready);
+	// if (g_frame_buffer_ready == 0)
+	// {
+	// 	memcpy(frame_buffer, gdi->primary_buffer, (gdi->width * gdi->height * sizeof(uint32_t)));
+	// 	frame_width = gdi->width;
+	// 	frame_height = gdi->height;
+	// 	g_frame_buffer_ready = 1;
+	// }
 
 	gdi->primary->hdc->hwnd->invalid->null = TRUE;
 	gdi->primary->hdc->hwnd->ninvalid = 0;
@@ -1525,7 +1525,7 @@ typedef struct payload_t {
     uint16_t x;
     uint16_t y;
     uint8_t flags;
-    uint8_t reserved;
+    uint8_t keyboard;
 } payload;
 
 #pragma pack()
@@ -1578,17 +1578,18 @@ int createSocket(int port)
 
 static DWORD WINAPI xf_frame_capture_thread(LPVOID param)
 {
-	while(1)
-	{
-		if (g_frame_buffer_ready == 1)
-		{
-			printf("Frame ready\n");
-			sendMsg(csock2, frame_buffer, frame_width * frame_height * sizeof(uint32_t));
-			uint8_t b[4];
-			read(csock2, b, 4);
-			g_frame_buffer_ready = 0;
-		}
-	}
+	// while(1)
+	// {
+	// 	if (g_frame_buffer_ready == 1)
+	// 	{
+	// 		printf("Frame ready\n");
+	// 		sendMsg(csock2, frame_buffer, frame_width * frame_height * sizeof(uint32_t));
+	// 		uint8_t b[4];
+	// 		read(csock2, b, 4);
+	// 		g_frame_buffer_ready = 0;
+	// 	}
+	// }
+	return 0;
 }
 
 static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
@@ -1606,6 +1607,7 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
     ssock = createSocket(PORT);
     csock = accept(ssock, (struct sockaddr *)&client, &clilen);
     bool button = false;
+	bool key = false;
     while(1)
 	{
         bzero(buff, BUFFSIZE);
@@ -1613,7 +1615,7 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
         payload *p = (payload*)buff;
         //printf("Received x=%d, y=%d, flags=%d\n", p->x, p->y, p->flags);
         XEvent xevent;
-        if (p->flags != button)
+        if ((p->flags & 0x01) != button)
         {
 			printf("p->flags: %d, button: %d\n", p->flags, button);
             button = p->flags;
@@ -1628,12 +1630,28 @@ static DWORD WINAPI xf_mouse_socket_thread(LPVOID param)
                 xevent.xbutton.button = 1;
             }
         }
+		else if (((p->flags >> 4) & 0x01) != key)
+		{
+			key = (p->flags >> 4) & 0x01;
+			if (key)
+			{
+				xevent.type = KeyPress;
+				xevent.xkey.keycode = p->keyboard;
+			}
+			else
+			{
+				xevent.type = KeyRelease;
+				xevent.xkey.keycode = p->keyboard;
+			}
+		}
         else
         {
 			xevent.type = MotionNotify;
 			xevent.xmotion.x = p->x;
 			xevent.xmotion.y = p->y;
         }
+
+		
 	xf_event_process(instance, &xevent);
     }
 
@@ -2189,13 +2207,13 @@ int RdpClientEntry(RDP_CLIENT_ENTRY_POINTS* pEntryPoints)
 	pEntryPoints->ClientStart = xfreerdp_client_start;
 	pEntryPoints->ClientStop = xfreerdp_client_stop;
 
-	struct sockaddr_in client;
-	int clilen = sizeof(client);
+	// struct sockaddr_in client;
+	// int clilen = sizeof(client);
 	
-	ssock2 = createSocket(2300);
-	WLog_DBG(TAG,"Socket created.");
-	csock2 = accept(ssock2, (struct sockaddr *)&client, &clilen);
-	WLog_DBG(TAG,"csock value: %" PRIu32 "", csock2);
+	// ssock2 = createSocket(2300);
+	// WLog_DBG(TAG,"Socket created.");
+	// csock2 = accept(ssock2, (struct sockaddr *)&client, &clilen);
+	// WLog_DBG(TAG,"csock value: %" PRIu32 "", csock2);
 
 	return 0;
 }
