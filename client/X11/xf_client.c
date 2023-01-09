@@ -394,7 +394,7 @@ static BOOL xf_sw_end_paint(rdpContext* context)
 		frame_height = gdi->height;
 		g_frame_buffer_ready = 1;
 	}
-	ReleaseMutex(ghMutex)
+	ReleaseMutex(ghMutex);
 
 	gdi->primary->hdc->hwnd->invalid->null = TRUE;
 	gdi->primary->hdc->hwnd->ninvalid = 0;
@@ -1592,7 +1592,7 @@ static DWORD WINAPI xf_frame_capture_thread(LPVOID param)
 			read(csock2, b, 4);
 			g_frame_buffer_ready = 0;
 		}
-		ReleaseMutex(ghMutex)
+		ReleaseMutex(ghMutex);
 	}
 	return 0;
 }
