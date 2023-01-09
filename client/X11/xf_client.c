@@ -128,6 +128,7 @@ static uint32_t frame_buffer[1920*1080];
 static uint32_t frame_width = 0;
 static uint32_t frame_height = 0;
 static volatile uint8_t g_frame_buffer_ready = 0;
+static HANDLE ghMutex;
 
 #ifdef WITH_XRENDER
 static void xf_draw_screen_scaled(xfContext* xfc, int x, int y, int w, int h)
@@ -384,14 +385,16 @@ static BOOL xf_sw_end_paint(rdpContext* context)
 	}
 
         //WLog_DBG(TAG,"Assaf 1: %" PRIu32 " 2: %" PRIu32 " 3: %" PRIu32 " 4: %" PRIu32 "", gdi->width, gdi->height, gdi->bitmap_size, 0);
-	// printf("got frame, g_frame_buffer_ready = %d\n", g_frame_buffer_ready);
-	// if (g_frame_buffer_ready == 0)
-	// {
-	// 	memcpy(frame_buffer, gdi->primary_buffer, (gdi->width * gdi->height * sizeof(uint32_t)));
-	// 	frame_width = gdi->width;
-	// 	frame_height = gdi->height;
-	// 	g_frame_buffer_ready = 1;
-	// }
+	printf("got frame, g_frame_buffer_ready = %d\n", g_frame_buffer_ready);
+	WaitForSingleObject(ghMutex, INFINITE);
+	if (g_frame_buffer_ready == 0)
+	{
+		memcpy(frame_buffer, gdi->primary_buffer, (gdi->width * gdi->height * sizeof(uint32_t)));
+		frame_width = gdi->width;
+		frame_height = gdi->height;
+		g_frame_buffer_ready = 1;
+	}
+	ReleaseMutex(ghMutex)
 
 	gdi->primary->hdc->hwnd->invalid->null = TRUE;
 	gdi->primary->hdc->hwnd->ninvalid = 0;
@@ -1578,17 +1581,19 @@ int createSocket(int port)
 
 static DWORD WINAPI xf_frame_capture_thread(LPVOID param)
 {
-	// while(1)
-	// {
-	// 	if (g_frame_buffer_ready == 1)
-	// 	{
-	// 		printf("Frame ready\n");
-	// 		sendMsg(csock2, frame_buffer, frame_width * frame_height * sizeof(uint32_t));
-	// 		uint8_t b[4];
-	// 		read(csock2, b, 4);
-	// 		g_frame_buffer_ready = 0;
-	// 	}
-	// }
+	while(1)
+	{
+		WaitForSingleObject(ghMutex, INFINITE);
+		if (g_frame_buffer_ready == 1)
+		{
+			printf("Frame ready\n");
+			sendMsg(csock2, frame_buffer, frame_width * frame_height * sizeof(uint32_t));
+			uint8_t b[4];
+			read(csock2, b, 4);
+			g_frame_buffer_ready = 0;
+		}
+		ReleaseMutex(ghMutex)
+	}
 	return 0;
 }
 
@@ -2208,13 +2213,15 @@ int RdpClientEntry(RDP_CLIENT_ENTRY_POINTS* pEntryPoints)
 	pEntryPoints->ClientStart = xfreerdp_client_start;
 	pEntryPoints->ClientStop = xfreerdp_client_stop;
 
-	// struct sockaddr_in client;
-	// int clilen = sizeof(client);
+	struct sockaddr_in client;
+	int clilen = sizeof(client);
 	
-	// ssock2 = createSocket(2300);
-	// WLog_DBG(TAG,"Socket created.");
-	// csock2 = accept(ssock2, (struct sockaddr *)&client, &clilen);
-	// WLog_DBG(TAG,"csock value: %" PRIu32 "", csock2);
+	ssock2 = createSocket(2300);
+	WLog_DBG(TAG,"Socket created.");
+	csock2 = accept(ssock2, (struct sockaddr *)&client, &clilen);
+	WLog_DBG(TAG,"csock value: %" PRIu32 "", csock2);
+
+	ghMutex = CreateMutex(NULL, FALSE, NULL); 
 
 	return 0;
 }
